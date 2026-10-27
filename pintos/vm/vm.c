@@ -3,6 +3,10 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "kernel/hash.h"
+#include "userprog/process.h"
+
+struct list frame_table;
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -110,12 +114,22 @@ vm_evict_frame (void) {
  * space.*/
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = NULL;
+	struct frame *frame = malloc(sizeof(struct frame));
 	/* TODO: Fill this function. */
 
 	ASSERT (frame != NULL);
-	ASSERT (frame->page == NULL);
+
+	frame -> kva = palloc_get_page(PAL_USER);
+	if (frame -> kva == NULL) //만약 유저 풀에 남은 공간 없다면?
+	{
+		PANIC("TODO");
+	}
+	
+	list_push_back(&frame_table, &frame -> frame_table_elem); //list에 프레임을 넣음.
+	frame -> page = NULL; //리스트에 넣어 줬으니 삭제해 공간 확보.
 	return frame;
+	
+	ASSERT (frame->page == NULL);
 }
 
 /* Growing the stack. */
