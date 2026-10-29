@@ -816,44 +816,57 @@ static bool install_page (void *upage, void *kpage, bool writable);
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
+
+ /*
+ 유저 페이지 공간 확보
+ ELF 파일에서 해당 세그먼트 읽기
+ 읽은 세그먼트를 메모리에 매핑
+
+ 읽을 바이트를 다 읽으면서
+ 새 페이지를 할당하고
+ 파일을 읽고
+ 빈 공간을 0으로 채우며
+ install_page()로 유저 가상 주소에 붙인다.
+(필요하던 말던 다 읽는다.)
+ */
 static bool
-load_segment (struct file *file, off_t ofs, uint8_t *upage,
-		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+load_segment (struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable) // Project 2
+{
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
-	file_seek (file, ofs);
-	while (read_bytes > 0 || zero_bytes > 0) {
+	file_seek (file, ofs); // file의 ofs 부분을 읽어라
+	while (read_bytes > 0 || zero_bytes > 0) { // read_bytes나 zero_bytes가 0이 아닐 때 까지 반복
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
-		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE; // PGSIZE가 read_bytes보다 클 때(참) read_bytes를 page_read_bytes에 read_bytes를 넣고 작을 경우(거짓) PGSIZE를 넣는다.
+		size_t page_zero_bytes = PGSIZE - page_read_bytes; // page_zero_bytes에 PGSIZE - page_read_bytes 값을 넣어준다.
 
 		/* Get a page of memory. */
-		uint8_t *kpage = palloc_get_page (PAL_USER);
-		if (kpage == NULL)
-			return false;
+		uint8_t *kpage = palloc_get_page (PAL_USER); // 메모리 할당
+		if (kpage == NULL) // 할당에 실패했을 경우
+			return false; // 바로 실패 선언
 
 		/* Load this page. */
-		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
-			palloc_free_page (kpage);
-			return false;
+		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) { // file을 page_read_bytes 만큼 읽고 kpage 안에 넣는다. page_read_bytes랑 비교해 같지 않다면,
+			palloc_free_page (kpage); // 할당한 kpage는 free해주며
+			return false; // 바로 실패 선언
 		}
-		memset (kpage + page_read_bytes, 0, page_zero_bytes);
+		memset (kpage + page_read_bytes, 0, page_zero_bytes); // 남은 공간을 0으로 초기화
 
 		/* Add the page to the process's address space. */
-		if (!install_page (upage, kpage, writable)) {
-			printf("fail\n");
-			palloc_free_page (kpage);
-			return false;
+		if (!install_page (upage, kpage, writable)) { // upage와 kpage를 프레임 테이블에 매핑하며 쓰기 권한을 설정해 준다.
+			printf("fail\n"); // 실패를 띄워주고
+			palloc_free_page (kpage); // 할당한 kpage는 free해주며
+			return false; // 바로 실패 선언
 		}
 
 		/* Advance. */
-		read_bytes -= page_read_bytes;
-		zero_bytes -= page_zero_bytes;
-		upage += PGSIZE;
+		read_bytes -= page_read_bytes; // page_read_bytes 만큼 읽었으니 read_bytes에 읽은 크기를 뺌
+		zero_bytes -= page_zero_bytes; // page_zero_bytes 만큼 읽었으니 zero_bytes에 읽은 크기를 뺌
+		upage += PGSIZE; // upage에 PGSIZE(4kb)만큼 추가해 준다.
 	}
 	return true;
 }
@@ -903,6 +916,8 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+
+	
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -920,8 +935,7 @@ lazy_load_segment (struct page *page, void *aux) {
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
 static bool
-load_segment (struct file *file, off_t ofs, uint8_t *upage,
-		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+load_segment (struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
@@ -934,12 +948,25 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+		struct aux_ *aux = malloc(sizeof(struct aux_));
+		if (aux == NULL)
+		{
 			return false;
+		}
+
+		aux -> aux_file = file;
+		aux -> aux_offset = ofs;
+		aux -> aux_read_bytes = page_read_bytes;
+		aux -> aux_zero_bytes = page_zero_bytes;
+
+		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable, lazy_load_segment, aux))
+		{
+			free(aux);
+			return false;
+		}
 
 		/* Advance. */
+		ofs += page_read_bytes;
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
