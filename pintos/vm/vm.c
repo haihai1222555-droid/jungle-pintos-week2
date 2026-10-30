@@ -27,6 +27,7 @@ vm_init (void) {
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
 	list_init(&frame_table);
+
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -298,6 +299,65 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
+
+	struct hash_iterator i;
+	hash_first (&i, &src->spt_hash);
+	while (hash_next (&i))
+	{
+		struct page *src_page = hash_entry (hash_cur (&i), struct page, elem);
+
+		enum vm_type src_vm_type = src_page->operations->type;
+		void * upage = src_page->va;
+		bool writable = src_page->writable;
+
+		//
+		if(src_vm_type == VM_UNINIT){
+			vm_initializer *init = src_page->uninit.init;
+			void *aux = get_copy_aux(src_page);
+			//if(aux == NULL) return false;
+			if(!vm_alloc_page_with_initializer(src_page->uninit.type, upage, writable, init, aux)){
+				return false;
+			}
+			continue;
+		}
+
+		if(src_vm_type == VM_FILE){
+			if(!vm_alloc_page_with_initializer(VM_FILE, upage, writable, NULL, NULL)){
+				return false;
+			}
+
+			if(!vm_claim_page(upage)) return false;
+
+			struct page *dst_page = spt_find_page(dst, upage);
+			memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+			continue;
+		}
+
+		if(src_vm_type == VM_ANON){
+			if(!vm_alloc_page_with_initializer(VM_ANON, upage, writable, NULL, NULL)){
+				return false;
+			}
+
+			if(!vm_claim_page(upage)) return false;
+
+			struct page *dst_page = spt_find_page(dst, upage);
+			memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+			continue;
+		}
+		// if(src_vm_type == VM_PAGE_CACHE){
+
+		// }
+
+		return false;
+	}
+	return true;
+}
+
+
+void
+cleanup_page(struct hash_elem *e, void *aux){
+	struct page *page = hash_entry(e, struct page, elem);
+	vm_dealloc_page(page);
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -305,4 +365,7 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	
+	hash_destroy(&spt->spt_hash, cleanup_page);
+
 }

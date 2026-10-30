@@ -986,6 +986,18 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	return true;
 }
 
+void*
+get_copy_aux(struct page *page){
+	struct vm_entry *src_aux = page->uninit.aux;
+
+	struct vm_entry *dst_aux = malloc(sizeof(struct vm_entry));
+	if(dst_aux == NULL) return NULL;
+	
+	memcpy(dst_aux, src_aux, sizeof(struct vm_entry));
+
+	return dst_aux;
+}
+
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 static bool
 setup_stack (struct intr_frame *if_) {
