@@ -2,7 +2,7 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
-#include "mmu.h"
+#include "threads/mmu.h"
 #include "bitmap.h"
 
 /* DO NOT MODIFY BELOW LINE */

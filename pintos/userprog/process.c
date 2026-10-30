@@ -363,7 +363,10 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 
+
 	/* And then load the binary */
+	supplemental_page_table_init(&t->spt);
+
 	char* save_ptr;
 	char* buffer;
 	char* letter;
@@ -992,7 +995,7 @@ get_copy_aux(struct page *page){
 
 	struct vm_entry *dst_aux = malloc(sizeof(struct vm_entry));
 	if(dst_aux == NULL) return NULL;
-	
+
 	memcpy(dst_aux, src_aux, sizeof(struct vm_entry));
 
 	return dst_aux;
