@@ -2,12 +2,15 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+#include "mmu.h"
+#include "bitmap.h"
 
 /* DO NOT MODIFY BELOW LINE */
 static struct disk *swap_disk;
 static bool anon_swap_in (struct page *page, void *kva);
 static bool anon_swap_out (struct page *page);
 static void anon_destroy (struct page *page);
+struct bitmap *swap_slot;
 
 /* DO NOT MODIFY this struct */
 static const struct page_operations anon_ops = {
@@ -21,7 +24,9 @@ static const struct page_operations anon_ops = {
 void
 vm_anon_init (void) {
 	/* TODO: Set up the swap_disk. */
-	swap_disk = NULL;
+	swap_disk = disk_get(1,1);
+	size_t bitmap_size = disk_size(swap_disk)/(PGSIZE/DISK_SECTOR_SIZE);
+	swap_slot = bitmap_create(bitmap_size);
 }
 
 /* Initialize the file mapping */
@@ -29,6 +34,7 @@ bool
 anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
 	page->operations = &anon_ops;
+	page->anon.swap_idx = -1;
 
 	struct anon_page *anon_page = &page->anon;
 }
@@ -49,4 +55,10 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	pml4_clear_page(thread_current()->pml4, page->va);
+
+	if(anon_page->swap_idx < 0){
+		return;
+	}
+	bitmap_reset(&swap_slot, anon_page->swap_idx);
 }

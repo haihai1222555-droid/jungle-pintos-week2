@@ -11,6 +11,10 @@
 #include "include/filesys/page_cache.h"
 #include "vm/uninit.h"
 
+#include "userprog/process.h"
+#include "bitmap.h"
+#include "devices/disk.h"
+
 struct list frame_table;
 
 
