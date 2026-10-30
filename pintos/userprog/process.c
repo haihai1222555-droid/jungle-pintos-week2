@@ -363,7 +363,10 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 
+
 	/* And then load the binary */
+	supplemental_page_table_init(&t->spt);
+
 	char* save_ptr;
 	char* buffer;
 	char* letter;
@@ -984,6 +987,18 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		ofs += page_read_bytes;
 	}
 	return true;
+}
+
+void*
+get_copy_aux(struct page *page){
+	struct vm_entry *src_aux = page->uninit.aux;
+
+	struct vm_entry *dst_aux = malloc(sizeof(struct vm_entry));
+	if(dst_aux == NULL) return NULL;
+
+	memcpy(dst_aux, src_aux, sizeof(struct vm_entry));
+
+	return dst_aux;
 }
 
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
